@@ -14,7 +14,222 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attempts: {
+        Row: {
+          challenge_id: string
+          completed_at: string
+          court_id: string | null
+          id: string
+          shots_made: number
+          shots_total: number
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed_at?: string
+          court_id?: string | null
+          id?: string
+          shots_made?: number
+          shots_total?: number
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed_at?: string
+          court_id?: string | null
+          id?: string
+          shots_made?: number
+          shots_total?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attempts_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempts_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cards: {
+        Row: {
+          artwork_url: string | null
+          created_at: string
+          id: string
+          name: string
+          rarity: string
+          stats_json: Json
+        }
+        Insert: {
+          artwork_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          rarity?: string
+          stats_json?: Json
+        }
+        Update: {
+          artwork_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          rarity?: string
+          stats_json?: Json
+        }
+        Relationships: []
+      }
+      challenges: {
+        Row: {
+          court_id: string
+          created_at: string
+          difficulty: number
+          id: string
+          total_shots: number
+          type: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          difficulty?: number
+          id?: string
+          total_shots?: number
+          type?: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          difficulty?: number
+          id?: string
+          total_shots?: number
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courts: {
+        Row: {
+          address: string | null
+          created_at: string
+          difficulty: number
+          id: string
+          lat: number
+          lng: number
+          name: string
+          photo_url: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          difficulty?: number
+          id?: string
+          lat: number
+          lng: number
+          name: string
+          photo_url?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          difficulty?: number
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string
+          photo_url?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          level: number
+          username: string
+          xp: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id: string
+          level?: number
+          username: string
+          xp?: number
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          level?: number
+          username?: string
+          xp?: number
+        }
+        Relationships: []
+      }
+      user_cards: {
+        Row: {
+          card_id: string
+          court_id: string | null
+          earned_at: string
+          id: string
+          source_challenge_id: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          court_id?: string | null
+          earned_at?: string
+          id?: string
+          source_challenge_id?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          court_id?: string | null
+          earned_at?: string
+          id?: string
+          source_challenge_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_cards_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_cards_source_challenge_id_fkey"
+            columns: ["source_challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
