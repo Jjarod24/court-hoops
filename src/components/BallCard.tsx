@@ -90,7 +90,7 @@ export function BallCard({
   );
 }
 
-function Stat({ label, value }: { label: string; value?: number }) {
+function Stat({ label, value }: { label: string; value: number | undefined }) {
   return (
     <div className="rounded-md bg-surface-2 py-1">
       <div className="font-display text-sm text-foreground">{value ?? "--"}</div>
