@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type * as LeafletNS from "leaflet";
 import type { Map as LeafletMap, Marker } from "leaflet";
 
 export type MapCourt = {
@@ -54,7 +55,7 @@ export function CourtMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function renderMarkers(lib?: typeof import("leaflet").default) {
+  async function renderMarkers(lib?: typeof LeafletNS) {
     const L = lib ?? (await import("leaflet")).default;
     const map = mapRef.current;
     if (!map) return;
