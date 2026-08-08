@@ -30,8 +30,12 @@ export function useBallDetection({ videoRef, zone, enabled, onShot }: Options) {
     if (!enabled) return;
     let cancelled = false;
     let raf = 0;
-    let model: { detect: (el: HTMLVideoElement) => Promise<Array<{ class: string; score: number; bbox: number[] }>> } | null =
-      null;
+    type Detector = {
+      detect: (
+        el: HTMLVideoElement,
+      ) => Promise<Array<{ class: string; score: number; bbox: number[] }>>;
+    };
+    let model: Detector | null = null;
 
     (async () => {
       setStatus("loading");
@@ -39,7 +43,7 @@ export function useBallDetection({ videoRef, zone, enabled, onShot }: Options) {
         const tf = await import("@tensorflow/tfjs");
         await tf.ready();
         const cocoSsd = await import("@tensorflow-models/coco-ssd");
-        model = (await cocoSsd.load({ base: "lite_mobilenet_v2" })) as typeof model;
+        model = (await cocoSsd.load({ base: "lite_mobilenet_v2" })) as unknown as Detector;
         if (cancelled) return;
         setStatus("ready");
       } catch {
@@ -63,7 +67,7 @@ export function useBallDetection({ videoRef, zone, enabled, onShot }: Options) {
           );
           const best = candidates.sort((a, b) => b.score - a.score)[0];
           if (best) {
-            const [x, y, bw, bh] = best.bbox;
+            const [x = 0, y = 0, bw = 0, bh = 0] = best.bbox;
             const point = { x: (x + bw / 2) / w, y: (y + bh / 2) / h, t: now };
             setBall({ x: point.x, y: point.y });
             const result = trackerRef.current.push(point);
