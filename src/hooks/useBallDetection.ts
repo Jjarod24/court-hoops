@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ShotTracker, type HoopZone, type ShotResult } from "@/lib/shot-tracker";
+import { ShotTracker, type HoopZone, type ShotDetection } from "@/lib/shot-tracker";
 
 export type DetectorStatus = "idle" | "loading" | "ready" | "unavailable";
 
@@ -7,7 +7,7 @@ type Options = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   zone: HoopZone;
   enabled: boolean;
-  onShot: (result: ShotResult) => void;
+  onShot: (detection: ShotDetection) => void;
 };
 
 /**
@@ -68,7 +68,7 @@ export function useBallDetection({ videoRef, zone, enabled, onShot }: Options) {
           const best = candidates.sort((a, b) => b.score - a.score)[0];
           if (best) {
             const [x = 0, y = 0, bw = 0, bh = 0] = best.bbox;
-            const point = { x: (x + bw / 2) / w, y: (y + bh / 2) / h, t: now };
+            const point = { x: (x + bw / 2) / w, y: (y + bh / 2) / h, t: now, score: best.score };
             setBall({ x: point.x, y: point.y });
             const result = trackerRef.current.push(point);
             if (result) onShotRef.current(result);
