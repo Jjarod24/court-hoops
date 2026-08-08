@@ -1,12 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Check, CircleSlash, ScanEye, Loader2 } from "lucide-react";
+import { X, Check, CircleSlash, ScanEye, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useBallDetection } from "@/hooks/useBallDetection";
-import type { ShotResult } from "@/lib/shot-tracker";
+import type { ShotDetection } from "@/lib/shot-tracker";
 
 // Hoop zone in normalized camera-frame coordinates — matches the on-screen reticle.
 const HOOP_ZONE = { cx: 0.5, cy: 0.5, r: 0.16 };
+
+type ShotEntry = {
+  hit: boolean;
+  auto: boolean;
+  confidence: number | null;
+  corrected: boolean;
+};
+
+function confidenceLabel(c: number) {
+  if (c >= 0.75) return "High";
+  if (c >= 0.5) return "Medium";
+  return "Low";
+}
+
+function confidenceClass(c: number) {
+  if (c >= 0.75) return "text-success";
+  if (c >= 0.5) return "text-primary";
+  return "text-destructive";
+}
 
 export function ChallengeCamera({
   title,
@@ -23,12 +42,15 @@ export function ChallengeCamera({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
-  const [shot, setShot] = useState(0);
-  const [made, setMade] = useState(0);
-  const [log, setLog] = useState<boolean[]>([]);
+  const [log, setLog] = useState<ShotEntry[]>([]);
   const [manual, setManual] = useState(false);
-  const [flash, setFlash] = useState<ShotResult | null>(null);
-  const shotRef = useRef(0);
+  const [flash, setFlash] = useState<{ hit: boolean; confidence: number | null } | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const logCountRef = useRef(0);
+
+  const shot = log.length;
+  const made = log.filter((s) => s.hit).length;
+  const done = shot >= totalShots;
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -50,28 +72,37 @@ export function ChallengeCamera({
     return () => stream?.getTracks().forEach((t) => t.stop());
   }, []);
 
-  function record(hit: boolean) {
-    if (shotRef.current >= totalShots) return;
-    const nextShot = shotRef.current + 1;
-    shotRef.current = nextShot;
-    setShot(nextShot);
-    setMade((m) => {
-      const next = m + (hit ? 1 : 0);
-      if (nextShot >= totalShots) onComplete(next);
+  function record(hit: boolean, detection?: ShotDetection) {
+    if (logCountRef.current >= totalShots) return;
+    logCountRef.current += 1;
+    const entry: ShotEntry = {
+      hit,
+      auto: Boolean(detection),
+      confidence: detection ? detection.confidence : null,
+      corrected: false,
+    };
+    setLog((l) => {
+      const next = [...l, entry];
+      if (next.length >= totalShots) setReviewing(true);
       return next;
     });
-    setLog((l) => [...l, hit]);
-    setFlash(hit ? "made" : "missed");
-    window.setTimeout(() => setFlash(null), 900);
+    setFlash({ hit, confidence: entry.confidence });
+    window.setTimeout(() => setFlash(null), 1600);
   }
 
-  const done = shot >= totalShots;
+  function toggleShot(index: number) {
+    setLog((l) =>
+      l.map((entry, i) =>
+        i === index ? { ...entry, hit: !entry.hit, corrected: !entry.corrected } : entry,
+      ),
+    );
+  }
 
   const { status, ball } = useBallDetection({
     videoRef,
     zone: HOOP_ZONE,
     enabled: !manual && !camError && !done && !submitting,
-    onShot: (result) => record(result === "made"),
+    onShot: (detection) => record(detection.result === "made", detection),
   });
 
   useEffect(() => {
@@ -84,6 +115,66 @@ export function ChallengeCamera({
     if (ball) return "Ball locked — shoot!";
     return "Auto-tracking · aim the hoop inside the ring";
   }, [manual, camError, status, ball]);
+
+  const lastIndex = log.length - 1;
+  const lastEntry = log[lastIndex];
+
+  if (reviewing) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-background px-4 py-6">
+        <div className="mx-auto max-w-md">
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+            Review your run
+          </p>
+          <h2 className="font-display text-3xl">
+            {made}/{totalShots} made
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tap any shot the tracker got wrong to flip it, then confirm.
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {log.map((entry, i) => (
+              <button
+                key={i}
+                onClick={() => toggleShot(i)}
+                className="flex w-full items-center justify-between rounded-xl border border-border bg-surface p-3 text-left transition-colors hover:bg-surface-2"
+              >
+                <div>
+                  <p className="font-display text-lg">
+                    Shot {i + 1} ·{" "}
+                    <span className={entry.hit ? "text-success" : "text-destructive"}>
+                      {entry.hit ? "Made" : "Missed"}
+                    </span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.auto
+                      ? entry.confidence != null
+                        ? `Auto · ${confidenceLabel(entry.confidence)} confidence (${Math.round(entry.confidence * 100)}%)`
+                        : "Auto"
+                      : "Logged manually"}
+                    {entry.corrected ? " · corrected by you" : ""}
+                  </p>
+                </div>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <RotateCcw className="h-3.5 w-3.5" /> Flip
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 flex gap-3">
+            <Button variant="secondary" onClick={onClose} disabled={submitting}>
+              Exit
+            </Button>
+            <Button className="flex-1" disabled={submitting} onClick={() => onComplete(made)}>
+              {submitting ? "Opening your pack…" : `Confirm ${made}/${totalShots}`}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
@@ -111,9 +202,9 @@ export function ChallengeCamera({
           <div className="relative h-56 w-56">
             <div
               className={`absolute inset-0 rounded-full border-2 border-dashed transition-colors ${
-                flash === "made"
+                flash?.hit
                   ? "border-success"
-                  : flash === "missed"
+                  : flash
                     ? "border-destructive"
                     : ball
                       ? "border-primary"
@@ -134,12 +225,18 @@ export function ChallengeCamera({
           )}
 
           {flash && (
-            <div
-              className={`absolute font-display text-5xl ${
-                flash === "made" ? "text-success" : "text-destructive"
-              }`}
-            >
-              {flash === "made" ? "SWISH!" : "MISS"}
+            <div className="absolute flex flex-col items-center gap-1">
+              <span
+                className={`font-display text-5xl ${flash.hit ? "text-success" : "text-destructive"}`}
+              >
+                {flash.hit ? "SWISH!" : "MISS"}
+              </span>
+              {flash.confidence != null && (
+                <span className={`text-xs ${confidenceClass(flash.confidence)}`}>
+                  {confidenceLabel(flash.confidence)} confidence ·{" "}
+                  {Math.round(flash.confidence * 100)}%
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -155,19 +252,55 @@ export function ChallengeCamera({
           </div>
           <Progress value={(shot / totalShots) * 100} />
           <div className="flex gap-1">
-            {Array.from({ length: totalShots }).map((_, i) => (
-              <span
-                key={i}
-                className={`h-1.5 flex-1 rounded-full ${
-                  log[i] === undefined
-                    ? "bg-muted"
-                    : log[i]
-                      ? "bg-success"
-                      : "bg-destructive"
-                }`}
-              />
-            ))}
+            {log.length === 0
+              ? Array.from({ length: totalShots }).map((_, i) => (
+                  <span key={i} className="h-1.5 flex-1 rounded-full bg-muted" />
+                ))
+              : Array.from({ length: totalShots }).map((_, i) => {
+                  const entry = log[i];
+                  return (
+                    <span
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${
+                        !entry ? "bg-muted" : entry.hit ? "bg-success" : "bg-destructive"
+                      }`}
+                      style={
+                        entry?.confidence != null
+                          ? { opacity: 0.35 + entry.confidence * 0.65 }
+                          : undefined
+                      }
+                    />
+                  );
+                })}
           </div>
+
+          {/* Correct the last auto-logged shot */}
+          {lastEntry && (
+            <div className="flex items-center justify-between rounded-xl bg-surface-2 px-3 py-2">
+              <div className="text-xs">
+                <p className="font-display text-base">
+                  Shot {lastIndex + 1}:{" "}
+                  <span className={lastEntry.hit ? "text-success" : "text-destructive"}>
+                    {lastEntry.hit ? "Made" : "Missed"}
+                  </span>
+                </p>
+                <p className="text-muted-foreground">
+                  {lastEntry.confidence != null ? (
+                    <span className={confidenceClass(lastEntry.confidence)}>
+                      {confidenceLabel(lastEntry.confidence)} confidence ·{" "}
+                      {Math.round(lastEntry.confidence * 100)}%
+                    </span>
+                  ) : (
+                    "Logged manually"
+                  )}
+                  {lastEntry.corrected ? " · corrected" : ""}
+                </p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => toggleShot(lastIndex)}>
+                <RotateCcw /> Wrong call
+              </Button>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {status === "loading" && !manual ? (
@@ -200,18 +333,32 @@ export function ChallengeCamera({
               </Button>
             </div>
           ) : (
-            <Button
-              variant="secondary"
-              className="w-full"
-              disabled={done || submitting}
-              onClick={() => setManual(true)}
-            >
-              Tracking off? Log shots manually
-            </Button>
-          )}
-
-          {submitting && (
-            <p className="text-center text-sm text-muted-foreground">Opening your pack…</p>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={done || submitting}
+                onClick={() => record(true)}
+              >
+                <Check /> Missed a make
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={done || submitting}
+                onClick={() => record(false)}
+              >
+                <CircleSlash /> Log miss
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={done || submitting}
+                onClick={() => setManual(true)}
+              >
+                Manual mode
+              </Button>
+            </div>
           )}
         </div>
       </div>
